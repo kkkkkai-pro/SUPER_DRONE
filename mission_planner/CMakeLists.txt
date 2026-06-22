@@ -109,3 +109,10 @@ add_executable(gazebo_mock_drone_tracker
 target_link_libraries(gazebo_mock_drone_tracker
         ${THIRD_PARTY}
         )
+
+add_executable(obstacle_course_validator
+        Apps/obstacle_course_validator.cpp
+        )
+target_link_libraries(obstacle_course_validator
+        ${THIRD_PARTY}
+        )

@@ -16,6 +16,7 @@ public:
         nh_.param<double>("publish_rate", publish_rate_, 5.0);
         nh_.param<double>("point_resolution", point_resolution_, 0.12);
         nh_.param<bool>("fallback_geometry_cloud", fallback_geometry_cloud_, true);
+        nh_.param<std::string>("course_type", course_type_, "competition");
 
         cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 2);
         marker_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("/competition_sim/field_markers", 1, true);
@@ -87,7 +88,22 @@ private:
         markers_.markers.clear();
         int id = 0;
 
-        addFieldMarker(id++);
+        if (course_type_ == "obstacle_course") {
+            buildObstacleCourseFallbackCloud(id);
+        } else {
+            buildCompetitionFallbackCloud(id);
+        }
+
+        fallback_cloud_.width = static_cast<uint32_t>(fallback_cloud_.points.size());
+        fallback_cloud_.height = 1;
+        fallback_cloud_.is_dense = true;
+        fallback_cloud_.header.frame_id = "world";
+        ROS_INFO_STREAM("[gazebo_cloud_bridge] Built " << course_type_ << " fallback cloud with "
+                        << fallback_cloud_.points.size() << " points");
+    }
+
+    void buildCompetitionFallbackCloud(int &id) {
+        addFieldMarker(id++, 5.0, 0.0, 12.0, 8.0);
         addBox({2.0, -2.6, 1.0, 0.5, 0.5, 2.0}, id++);
         addBox({2.8, -1.4, 1.0, 0.5, 0.5, 2.0}, id++);
         addBox({3.6, -2.5, 1.0, 0.5, 0.5, 2.0}, id++);
@@ -109,28 +125,27 @@ private:
         addBox({9.2, -0.75, 0.85, 0.22, 0.22, 1.7}, id++);
         addBox({9.2, 0.75, 0.85, 0.22, 0.22, 1.7}, id++);
         addBox({9.2, 0.0, 1.72, 0.22, 1.72, 0.22}, id++);
-
-        fallback_cloud_.width = static_cast<uint32_t>(fallback_cloud_.points.size());
-        fallback_cloud_.height = 1;
-        fallback_cloud_.is_dense = true;
-        fallback_cloud_.header.frame_id = "world";
-        ROS_INFO_STREAM("[gazebo_cloud_bridge] Built fallback cloud with "
-                        << fallback_cloud_.points.size() << " points");
     }
 
-    void addFieldMarker(const int id) {
+    void buildObstacleCourseFallbackCloud(int &id) {
+        addFieldMarker(id++, 4.0, 0.0, 10.0, 6.0);
+        addBox({4.0, 0.0, 1.0, 1.0, 2.0, 2.0}, id++);
+    }
+
+    void addFieldMarker(const int id, const double x, const double y,
+                        const double sx, const double sy) {
         visualization_msgs::Marker marker;
         marker.header.frame_id = "world";
         marker.ns = "field";
         marker.id = id;
         marker.type = visualization_msgs::Marker::CUBE;
         marker.action = visualization_msgs::Marker::ADD;
-        marker.pose.position.x = 5.0;
-        marker.pose.position.y = 0.0;
+        marker.pose.position.x = x;
+        marker.pose.position.y = y;
         marker.pose.position.z = 0.01;
         marker.pose.orientation.w = 1.0;
-        marker.scale.x = 12.0;
-        marker.scale.y = 8.0;
+        marker.scale.x = sx;
+        marker.scale.y = sy;
         marker.scale.z = 0.02;
         marker.color.r = 0.2;
         marker.color.g = 0.2;
@@ -240,6 +255,7 @@ private:
     ros::Publisher marker_pub_;
     ros::Timer timer_;
     std::string input_topic_;
+    std::string course_type_{"competition"};
     double publish_rate_{5.0};
     double point_resolution_{0.12};
     bool fallback_geometry_cloud_{true};
