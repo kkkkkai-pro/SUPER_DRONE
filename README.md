@@ -1,233 +1,159 @@
 # SUPER_DRONE
 
-`SUPER_DRONE` is a ROS1 real-flight integration project based on [hku-mars/SUPER](https://github.com/hku-mars/SUPER), adapted for a `Livox MID-360` lidar platform without a depth camera.
+`SUPER_DRONE` is a complete ROS1 source workspace snapshot built around `hku-mars/SUPER`, extended with the real-flight packages required for a `Livox MID-360 + FAST_LIO + px4ctrl` stack.
 
-This repository keeps `SUPER` as the main planner and adds a dedicated mission layer for competition flight. The integration idea references the waypoint-style mission flow used in `REAL_DRONE_400`, but all code changes are confined to the `SUPER` side. No `REAL_DRONE_400` source code is included or modified in this repository.
+This repository keeps `SUPER` as the main planner, keeps the `SUPER_DRONE` mission layer added earlier, and vendors the required real-flight packages from the local `REAL_DRONE_400` snapshot so the workspace now contains planning, mapping, control, and optional camera drivers in one repo.
 
-## 1. Repository Scope
+## 1. Added Workspace Directories
 
-Included in this repository:
+The following package groups were added into this repository.
 
-- The `SUPER` source tree needed for planning, mapping, mission management, and ROS1 integration
-- The new `SUPER_DRONE` mission interface, planner config, launch file, and message definition
-- A rewritten root `README.md` that documents every modified and added file
+### 1.1 `realflight_modules/`
 
-Excluded from this repository:
+Added from `D:\super\REAL_DRONE_400\src\realflight_modules`:
 
-- The original `.git` history from the upstream `SUPER` checkout
-- ROS build outputs such as `build`, `devel`, `install`, and runtime `log` directories
-- Large demo assets and simulation data that are not required for this real-flight integration, such as:
-  - `misc/fig1.gif`
-  - `misc/tracking.gif`
-  - `misc/tailsitter.gif`
-  - `misc/exp.gif`
-  - `misc/scirobotics.ado6187.pdf`
-  - `mars_uav_sim/perfect_drone_sim/pcd/random_map_150.pcd`
-  - `mars_uav_sim/perfect_drone_sim/pcd/random_map_50.pcd`
-  - `mars_uav_sim/perfect_drone_sim/pcd/random_map_2_26609.pcd`
-  - `mars_uav_sim/perfect_drone_sim/pcd/random_map_24_6635.pcd`
-  - `mars_uav_sim/perfect_drone_sim/meshes/yunque-M.dae`
-  - `mars_uav_sim/perfect_drone_sim/meshes/R.jpeg`
+- `realflight_modules/mid360_fastlio/FAST_LIO`
+- `realflight_modules/mid360_fastlio/livox_ros_driver`
+- `realflight_modules/mid360_fastlio/livox_ros_driver2`
+- `realflight_modules/px4ctrl`
+- `realflight_modules/realsense-ros`
 
-## 2. What Was Changed in SUPER
+### 1.2 `utils/`
 
-The following existing files from `SUPER` were modified.
+Added from `D:\super\REAL_DRONE_400\src\utils`:
 
-### 2.1 Message Registration
+- `utils/uav_utils`
+- `utils/cmake_utils`
 
-1. `mars_uav_sim/mars_quadrotor_msgs/CMakeLists.txt`
-   - Added `TakeoffLand.msg` to `add_message_files(...)`
-   - Purpose: allow the new mission node to publish a landing command
+`cmake_utils` was added because the vendored `uav_utils` and the existing `quadrotor_msgs` manifest both depend on it.
 
-2. `mars_uav_sim/mars_quadrotor_msgs/ros/ros1.CMakeLists.txt`
-   - Added `TakeoffLand.msg` to the ROS1 message registration list
-   - Purpose: ensure ROS1 message generation includes the new landing message
+## 2. Why `REAL_DRONE_400/utils/quadrotor_msgs` Was Not Copied
 
-### 2.2 Mission Planner Build and Dependency Wiring
+This workspace now keeps only one `quadrotor_msgs` package:
 
-3. `mission_planner/CMakeLists.txt`
-   - Added a new executable:
-     - `super_drone_mission`
-     - source file: `Apps/ros1_super_drone_mission.cpp`
-   - Purpose: build the dedicated competition mission node
+- `mars_uav_sim/mars_quadrotor_msgs`
 
-4. `mission_planner/ros/ros1.CMakeLists.txt`
-   - Added the same `super_drone_mission` executable for the ROS1 build path
-   - Purpose: keep the ROS1 build flow complete and consistent
+`REAL_DRONE_400/utils/quadrotor_msgs` was not copied because it would conflict with the existing `SUPER` message package by package name.
 
-5. `mission_planner/package.xml`
-   - Added:
-     - `build_depend>quadrotor_msgs`
-     - `build_export_depend>quadrotor_msgs`
-     - `exec_depend>quadrotor_msgs`
-   - Purpose: expose the new takeoff/landing message dependency to the package
+Instead, the `SUPER` message package was extended to satisfy both sides.
 
-6. `mission_planner/ros/ros1.package.xml`
-   - Added the same `quadrotor_msgs` dependency entries
-   - Purpose: keep the ROS1 package manifest aligned with the new mission node
+## 3. Changes Made to SUPER
 
-## 3. New Files Added for SUPER_DRONE
+The following existing `SUPER` files were modified.
 
-The following files were added to create the `SUPER_DRONE` integration layer.
+### 3.1 Unified message package
 
-1. `mars_uav_sim/mars_quadrotor_msgs/msg/TakeoffLand.msg`
-   - New ROS message:
-     - `TAKEOFF = 1`
-     - `LAND = 2`
-     - `takeoff_land_cmd`
-   - Purpose: provide a simple landing command interface for `/px4ctrl/takeoff_land`
+- `mars_uav_sim/mars_quadrotor_msgs/CMakeLists.txt`
+- `mars_uav_sim/mars_quadrotor_msgs/ros/ros1.CMakeLists.txt`
+- `mars_uav_sim/mars_quadrotor_msgs/package.xml`
+- `mars_uav_sim/mars_quadrotor_msgs/ros/ros1.package.xml`
 
-2. `mission_planner/include/waypoint_mission/super_drone_config.hpp`
-   - New config class: `SuperDroneMissionConfig`
-   - Purpose:
-     - load mission parameters from YAML
-     - load waypoint text files
-     - define topic names and timing parameters for the real-flight mission
+These files were updated so `SUPER` and `px4ctrl` share the same `quadrotor_msgs` package.
 
-3. `mission_planner/include/waypoint_mission/super_drone_mission.hpp`
-   - New mission logic class: `SuperDroneMission`
-   - Purpose:
-     - subscribe to odometry
-     - wait for takeoff trigger
-     - publish waypoint goals to `SUPER`
-     - switch to the next waypoint when within threshold distance
-     - hold at the final point
-     - send the final landing command
+### 3.2 Existing SUPER_DRONE integration files already kept in use
 
-4. `mission_planner/Apps/ros1_super_drone_mission.cpp`
-   - New ROS1 executable entry point
-   - Purpose: launch the `SuperDroneMission` node
+The previously added `SUPER_DRONE` planner and mission files remain the default interfaces for the planning stack:
 
-5. `mission_planner/config/super_drone_waypoint.yaml`
-   - New mission-layer config file
-   - Purpose: define mission topics and start/landing timing
+- `super_planner/config/super_drone_ros1.yaml`
+- `mission_planner/config/super_drone_waypoint.yaml`
+- `mission_planner/data/super_drone_competition_template.txt`
+- `mission_planner/launch/super_drone.launch`
 
-6. `mission_planner/data/super_drone_competition_template.txt`
-   - New waypoint template
-   - Purpose: provide a placeholder competition route
-   - Note: the last point is treated as the final hover point before landing
+## 4. New Files Added by This Expansion
 
-7. `mission_planner/launch/super_drone.launch`
-   - New launch file
-   - Purpose: start only:
-     - `super_drone_mission`
-     - `fsm_node`
-   - This avoids pulling in simulator-only launch content
+### 4.1 Message file added into SUPER
 
-8. `super_planner/config/super_drone_ros1.yaml`
-   - New planner-side config file for ROS1 real flight
-   - Purpose:
-     - connect the lidar point cloud topic
-     - connect odometry
-     - enable click-goal mode for mission handoff
-     - publish planner output to the flight controller interface
+- `mars_uav_sim/mars_quadrotor_msgs/msg/Px4ctrlDebug.msg`
 
-## 4. SUPER_DRONE Overall Logic
+This was added because `px4ctrl` depends on `quadrotor_msgs/Px4ctrlDebug` but `SUPER` did not provide it.
 
-The stitched system works like this:
+### 4.2 FAST_LIO compatibility layer
 
-1. `MID-360` point cloud is published to `/cloud_registered`
-2. High-rate odometry is published to `/Odom_high_freq`
-3. `super_planner` uses those two inputs to maintain the local map and generate a collision-free trajectory
-4. `super_drone_mission` waits for `/traj_start_trigger`
-5. After the trigger arrives, `super_drone_mission` sends one waypoint at a time to `/planning/click_goal`
-6. `SUPER` replans toward that goal and publishes commands to `/position_cmd`
-7. After the final hover point is reached, `super_drone_mission` waits for `landing_trigger_delay`
-8. `super_drone_mission` publishes `quadrotor_msgs/TakeoffLand` with `LAND` to `/px4ctrl/takeoff_land`
+- `realflight_modules/mid360_fastlio/FAST_LIO/include/livox_msg_compat.hpp`
 
-## 5. Key Interfaces
+This compatibility header aliases the old `livox_ros_driver` message namespace to `livox_ros_driver2`, so the default `MID-360` chain can use `livox_ros_driver2` without adding an extra bridge node.
 
-### 5.1 Inputs to SUPER_DRONE
+### 4.3 livox_ros_driver2 ROS package metadata
 
-- `/cloud_registered`
-  - Type: point cloud
-  - Used by: `rog_map` through `super_planner/config/super_drone_ros1.yaml`
+- `realflight_modules/mid360_fastlio/livox_ros_driver2/package.xml`
 
-- `/Odom_high_freq`
-  - Type: `nav_msgs/Odometry`
-  - Used by:
-    - `super_drone_mission`
-    - `rog_map` and planner state in `SUPER`
+This file was added because the local snapshot did not include a ROS package manifest for `livox_ros_driver2`.
 
-- `/traj_start_trigger`
-  - Type: `geometry_msgs/PoseStamped`
-  - Used by: `super_drone_mission`
-  - Meaning: start the waypoint mission after takeoff
+### 4.4 Integrated launch entry
 
-### 5.2 Internal Handoff from Mission Layer to SUPER Planner
+- `mission_planner/launch/super_drone_realflight.launch`
 
-- `/planning/click_goal`
-  - Type: `geometry_msgs/PoseStamped`
-  - Published by: `super_drone_mission`
-  - Consumed by: `fsm_node`
-  - Meaning: each waypoint is injected into `SUPER` as a sequential target
+This is the full real-flight launch entry for:
 
-### 5.3 Outputs from SUPER_DRONE
+- `livox_ros_driver2`
+- `FAST_LIO`
+- `px4ctrl`
+- `super_drone_mission`
+- `fsm_node`
 
-- `/position_cmd`
-  - Type: planner position command
-  - Published by: `SUPER`
-  - Consumed by: the downstream controller
+## 5. Default Runtime Chain
 
-- `/px4ctrl/takeoff_land`
-  - Type: `quadrotor_msgs/TakeoffLand`
-  - Published by: `super_drone_mission`
-  - Meaning: final landing command
+Default runtime data flow:
 
-## 6. Files You Will Most Likely Edit Before a Real Competition Flight
+`MID-360 -> livox_ros_driver2 -> FAST_LIO -> SUPER -> px4ctrl`
 
-1. `mission_planner/data/super_drone_competition_template.txt`
-   - Replace the placeholder waypoints with the actual route for your field
+Key default topics:
 
-2. `mission_planner/config/super_drone_waypoint.yaml`
-   - Change the mission topics or timing parameters if your PX4/trigger side differs
+- Driver inputs/outputs:
+  - `/livox/lidar`
+  - `/livox/imu`
+- FAST_LIO outputs:
+  - `/cloud_registered`
+  - `/Odom_high_freq`
+- Mission to planner handoff:
+  - `/planning/click_goal`
+- Planner to controller:
+  - `/position_cmd`
+- Takeoff trigger:
+  - `/traj_start_trigger`
+- Landing command:
+  - `/px4ctrl/takeoff_land`
 
-3. `super_planner/config/super_drone_ros1.yaml`
-   - Change planner interfaces and dynamic limits
-   - Especially:
-     - `cmd_topic`
-     - `cloud_topic`
-     - `odom_topic`
-     - `max_vel`
-     - `max_acc`
-     - map size and map resolution
+## 6. Launch Files
 
-## 7. Build
+### 6.1 Lightweight planner entry
 
-This repository is intended for a ROS1 catkin workspace.
+- `mission_planner/launch/super_drone.launch`
 
-Example:
+This starts only the `SUPER_DRONE` mission node and the `SUPER` planner node.
+
+### 6.2 Full real-flight entry
+
+- `mission_planner/launch/super_drone_realflight.launch`
+
+This starts the full chain:
+
+- `livox_ros_driver2/launch/msg_MID360.launch`
+- `fast_lio/launch/mapping_mid360.launch`
+- `px4ctrl/launch/run_ctrl.launch`
+- `mission_planner/launch/super_drone.launch`
+
+## 7. Notes About Optional Packages
+
+- `realsense-ros` is present because you asked to vendor the full `realflight_modules` block.
+- The default integrated launch does not use `realsense-ros`.
+- The repository now contains both `livox_ros_driver` and `livox_ros_driver2`, but the default `MID-360` chain is `driver2`.
+
+## 8. External System Dependencies
+
+These are still external system dependencies and are not vendored as source packages here:
+
+- ROS1 Noetic
+- `mavros`
+- `apr`
+- `PCL`
+- `Eigen`
+- other standard ROS dependencies required by the vendored packages
+
+## 9. Build and Run
+
+Use this repository as a ROS1 source tree inside your catkin workspace, then launch the full chain with:
 
 ```bash
-cd <your_catkin_ws>/src
-git clone https://github.com/kkkkkai-pro/SUPER_DRONE.git
-cd ..
-catkin_make
-source devel/setup.bash
+roslaunch mission_planner super_drone_realflight.launch
 ```
-
-## 8. Launch
-
-Example:
-
-```bash
-roslaunch mission_planner super_drone.launch
-```
-
-This launch file starts:
-
-- `mission_planner/super_drone_mission`
-- `super_planner/fsm_node`
-
-## 9. Important Notes
-
-- This repository is a cleaned integration snapshot, not the original upstream git history.
-- The original upstream project is `hku-mars/SUPER`.
-- The mission integration idea was designed for a ROS1 real-flight workflow with lidar-only perception.
-- The current waypoint file is only a template and must be replaced before a real competition run.
-- No build verification is bundled in this repository snapshot. Please run `catkin_make` in your own ROS1 environment and then check topics, frames, and controller interfaces on your platform.
-
-## 10. Upstream Reference
-
-- Upstream planner framework: [hku-mars/SUPER](https://github.com/hku-mars/SUPER)
-- Trajectory-style competition workflow reference: [NEU-REAL/REAL_DRONE_400](https://github.com/NEU-REAL/REAL_DRONE_400)
